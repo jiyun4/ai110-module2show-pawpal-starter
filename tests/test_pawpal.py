@@ -82,3 +82,50 @@ def test_no_conflicts_when_times_differ():
     owner.add_pet(pet)
 
     assert Scheduler(owner).detect_conflicts() == []      # different times, no warning
+
+
+def test_sort_by_time_returns_tasks_in_chronological_order():
+    # Added out of order, and one time is un-padded ("9:15") to prove the sort
+    # keys on real clock times, not raw strings.
+    pet = Pet(name="Mochi", species="Dog", breed="Corgi")
+    pet.add_task(Task("Evening walk", time=30, frequency="daily", start="18:00"))
+    pet.add_task(Task("Groom", time=45, frequency="weekly", start="9:15"))
+    pet.add_task(Task("Feed", time=10, frequency="daily", start="07:00"))
+    owner = Owner(name="Jiyeon", available_time=120)
+    owner.add_pet(pet)
+
+    ordered = Scheduler(owner).sort_by_time()
+
+    starts = [task.start for task in ordered]
+    assert starts == ["07:00", "9:15", "18:00"]           # earliest clock time first
+
+
+def test_completing_daily_task_creates_task_for_the_next_day():
+    pet = Pet(name="Mochi", species="Dog", breed="Corgi")
+    task = Task(description="Feed", time=10, frequency="daily", start="07:00")
+    pet.add_task(task)
+    owner = Owner(name="Jiyeon", available_time=60)
+    owner.add_pet(pet)
+    scheduler = Scheduler(owner)
+
+    upcoming = scheduler.complete_task(task)
+
+    assert upcoming is not None                                   # a follow-up was created
+    assert upcoming.due_date == date.today() + timedelta(days=1)  # due the following day
+    assert upcoming.completed is False                            # starts fresh
+    assert upcoming.description == task.description               # same activity carried over
+    assert upcoming in pet.tasks                                  # attached to the same pet
+
+
+def test_detect_conflicts_flags_duplicate_start_times():
+    pet = Pet(name="Mochi", species="Dog", breed="Corgi")
+    pet.add_task(Task("Feed", time=10, frequency="daily", start="08:00"))
+    pet.add_task(Task("Meds", time=5, frequency="daily", start="08:00"))   # same slot
+    owner = Owner(name="Jiyeon", available_time=60)
+    owner.add_pet(pet)
+
+    conflicts = Scheduler(owner).detect_conflicts()
+
+    assert len(conflicts) == 1                            # one clashing time slot
+    assert "08:00" in conflicts[0]
+    assert "Feed" in conflicts[0] and "Meds" in conflicts[0]

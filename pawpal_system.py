@@ -10,7 +10,7 @@ Class hierarchy (who "owns" who):
     Scheduler         -> the "brain" that retrieves & organizes tasks
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, time as clock, timedelta
 
 
@@ -63,14 +63,7 @@ class Task:
         delta = FREQUENCY_DELTAS.get(self.frequency)
         if delta is None:
             return None
-        return Task(
-            description=self.description,
-            time=self.time,
-            frequency=self.frequency,
-            priority=self.priority,
-            start=self.start,
-            due_date=date.today() + delta,
-        )
+        return replace(self, due_date=date.today() + delta, completed=False)
 
     def __str__(self) -> str:
         """Return a formatted string showing start time, completion status, description, duration, frequency, priority, and due date."""
@@ -151,21 +144,23 @@ class Scheduler:
         if upcoming is None:
             return None
         for pet in self.owner.pets:
-            if task in pet.tasks:
+            if any(t is task for t in pet.tasks):
                 pet.add_task(upcoming)
                 break
         return upcoming
 
-    def prioritized_tasks(self) -> list[Task]:
+    def prioritized_tasks(self, tasks: "list[Task] | None" = None) -> list[Task]:
         """Pending tasks ordered by importance: highest priority first,
         and for ties the shorter task first so more work fits in the day."""
-        return sorted(self.pending_tasks(), key=lambda task: (task.priority, task.time))
+        tasks = self.pending_tasks() if tasks is None else tasks
+        return sorted(tasks, key=lambda task: (task.priority, task.time))
 
-    def sort_by_time(self) -> list[Task]:
+    def sort_by_time(self, tasks: "list[Task] | None" = None) -> list[Task]:
         """Pending tasks ordered chronologically by their 'HH:MM' start time."""
-        return sorted(self.pending_tasks(), key=lambda task: parse_hhmm(task.start))
+        tasks = self.pending_tasks() if tasks is None else tasks
+        return sorted(tasks, key=lambda task: parse_hhmm(task.start))
 
-    def detect_conflicts(self) -> list[str]:
+    def detect_conflicts(self, tasks: "list[Task] | None" = None) -> list[str]:
         """Lightweight check for tasks that start at the same clock time.
 
         Groups pending tasks (across all pets) by their normalized start time,
@@ -173,25 +168,26 @@ class Scheduler:
         message per clashing time; an empty list means no conflicts. This never
         raises — a clash is reported, not treated as an error.
         """
+        tasks = self.pending_tasks() if tasks is None else tasks
         by_time: dict[clock, list[Task]] = {}
-        for task in self.pending_tasks():
+        for task in tasks:
             by_time.setdefault(parse_hhmm(task.start), []).append(task)
 
         warnings = []
-        for start_time, tasks in sorted(by_time.items()):
-            if len(tasks) > 1:
-                names = ", ".join(task.description for task in tasks)
+        for start_time, clashing in sorted(by_time.items()):
+            if len(clashing) > 1:
+                names = ", ".join(task.description for task in clashing)
                 warnings.append(
                     f"⚠️  Time conflict at {start_time.strftime('%H:%M')}: {names}"
                 )
         return warnings
 
-    def tasks_that_fit(self) -> list[Task]:
+    def tasks_that_fit(self, tasks: "list[Task] | None" = None) -> list[Task]:
         """Return pending tasks that fit within the owner's available time budget,
         packing the most important tasks first."""
         remaining = self.owner.available_time
         plan = []
-        for task in self.prioritized_tasks():
+        for task in self.prioritized_tasks(tasks):
             if task.time <= remaining:
                 plan.append(task)
                 remaining -= task.time
@@ -199,7 +195,8 @@ class Scheduler:
 
     def display_plan(self) -> str:
         """Build a readable summary of today's plan for print / Streamlit."""
-        plan = self.tasks_that_fit()
+        pending = self.pending_tasks()
+        plan = self.tasks_that_fit(pending)
         if not plan:
             return f"{self.owner.name} has no tasks that fit today."
 
@@ -210,7 +207,7 @@ class Scheduler:
             total += task.time
         lines.append(f"Total: {total} min")
 
-        conflicts = self.detect_conflicts()
+        conflicts = self.detect_conflicts(pending)
         if conflicts:
             lines.append("")
             lines.extend(conflicts)
