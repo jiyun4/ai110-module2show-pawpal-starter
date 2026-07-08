@@ -62,7 +62,7 @@ Total: 75 min
 
 ```bash
 # Run the full test suite:
-pytest
+python -m pytest
 
 # Run with coverage:
 pytest --cov
@@ -72,27 +72,46 @@ Sample test output:
 
 ```
 # Paste your pytest output here
+
+===================================================== test session starts =====================================================
+platform darwin -- Python 3.13.5, pytest-8.3.4, pluggy-1.5.0
+rootdir: /Users/jiyeonkim/ai110-module2show-pawpal-starter
+plugins: anyio-4.7.0
+collected 10 items                                                                                                            
+
+tests/test_pawpal.py ..........                                                                                         [100%]
+
+===================================================== 10 passed in 0.03s ======================================================
 ```
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
-
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `Scheduler.sort_by_time()`, `Scheduler.prioritized_tasks()` | By start time, or by priority then duration |
+| Filtering | `Scheduler.pending_tasks()`, `Scheduler.completed_tasks()` | By completion status (no per-pet filter yet) |
+| Conflict handling | `Scheduler.detect_conflicts()` | Flags pending tasks sharing the same start time |
+| Recurring tasks | `Task.next_occurrence()`, `Scheduler.complete_task()` | Computes next due date from `FREQUENCY_DELTAS`, re-adds to the same pet |
+
 
 ## 📸 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+Follow these steps to try the app yourself:
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+1. **Start the app.** Run `streamlit run app.py` in your terminal. A page called PawPal+ opens in your browser.
+
+2. **Enter your info.** Type your name in the "Owner name" box and set how many minutes you have free today (for example, 60). Type your pet's name and pick their species.
+
+3. **Add your first task.** Fill in the five task boxes — a title like "Morning walk", how long it takes (30 min), how often it repeats (daily), how important it is (priority 1 = must-do), and what time it starts (07:00). Click **Add task**. A green success message confirms it was saved.
+
+4. **Add a few more tasks.** Try adding tasks at the same start time on purpose — for example two tasks both at 08:00. After you add them, a yellow warning box will appear automatically telling you there is a time conflict.
+
+5. **Switch the sort view.** Use the "Sort tasks by" radio buttons above the table. Toggle between **Chronological** (tasks sorted by start time, earliest first) and **Priority** (most important tasks shown first). The table updates instantly.
+
+6. **Mark a task complete.** Scroll to the "Complete a task" section. Pick a daily task from the dropdown and click **Mark complete**. A green message tells you the next occurrence was scheduled — for example, "Next 'Morning walk' scheduled for 2026-07-09." The task list now shows that new entry.
+
+7. **Generate today's plan.** Click **Generate schedule**. Three tiles appear showing how many tasks fit, total time used, and minutes left over. Below them is a table of only the tasks that fit inside your available time, sorted by priority so the most important ones are at the top.
+
+8. **See the conflict check again.** If any tasks in your generated plan share a start time, a yellow warning appears inside the plan section too — so you know exactly which tasks to reschedule.
 
 **Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->

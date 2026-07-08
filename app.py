@@ -91,10 +91,24 @@ if st.button("Add task"):
     st.session_state.pet.add_task(new_task)     # Pet.add_task() — attaches to this pet
     st.success(f"Added '{task_title}' to {st.session_state.pet.name}'s task list.")
 
-# Display current task objects as a table
+# --- Task list with live sorting and conflict detection ---
+
 current_tasks = st.session_state.pet.tasks
+scheduler = Scheduler(st.session_state.owner)
+
 if current_tasks:
-    st.write("Current tasks:")
+    sort_mode = st.radio(
+        "Sort tasks by",
+        ["Chronological (start time)", "Priority (most important first)"],
+        horizontal=True,
+    )
+
+    if sort_mode == "Chronological (start time)":
+        display_tasks = scheduler.sort_by_time()
+    else:
+        all_tasks = scheduler.all_tasks()
+        display_tasks = scheduler.prioritized_tasks(all_tasks)
+
     st.table([
         {
             "Start": t.start,
@@ -102,11 +116,19 @@ if current_tasks:
             "Duration (min)": t.time,
             "Frequency": t.frequency,
             "Priority": t.priority,
-            "Due": t.due_date,
+            "Due": str(t.due_date),
             "Done": "✓" if t.completed else "",
         }
-        for t in current_tasks
+        for t in display_tasks
     ])
+
+    # Conflict warnings — always live, no button needed
+    conflicts = scheduler.detect_conflicts()
+    if conflicts:
+        for warning in conflicts:
+            st.warning(warning)
+    else:
+        st.success("No scheduling conflicts detected.")
 else:
     st.info("No tasks yet. Add one above.")
 
@@ -122,7 +144,6 @@ if pending:
         format_func=lambda i: f"{pending[i].description} ({pending[i].frequency})",
     )
     if st.button("Mark complete"):
-        scheduler = Scheduler(st.session_state.owner)
         upcoming = scheduler.complete_task(pending[idx])
         if upcoming is not None:
             st.success(f"Done! Next '{upcoming.description}' scheduled for {upcoming.due_date}.")
@@ -133,10 +154,38 @@ st.divider()
 
 # --- Schedule generation ---
 
-st.subheader("Build Schedule")
-st.caption("Builds a plan from your tasks using Scheduler.display_plan().")
+st.subheader("Today's Plan")
+st.caption("Tasks ranked by priority that fit within your available time.")
 
 if st.button("Generate schedule"):
-    scheduler = Scheduler(st.session_state.owner)   # Scheduler takes the Owner
-    plan = scheduler.display_plan()                  # display_plan() filters & formats
-    st.text(plan)
+    plan = scheduler.tasks_that_fit()
+    total_min = sum(t.time for t in plan)
+    available = st.session_state.owner.available_time
+
+    if not plan:
+        st.warning(f"No tasks fit within {available} minutes today.")
+    else:
+        col_a, col_b, col_c = st.columns(3)
+        col_a.metric("Tasks scheduled", len(plan))
+        col_b.metric("Time used (min)", total_min)
+        col_c.metric("Time remaining (min)", available - total_min)
+
+        st.table([
+            {
+                "Priority": t.priority,
+                "Start": t.start,
+                "Task": t.description,
+                "Duration (min)": t.time,
+                "Frequency": t.frequency,
+                "Due": str(t.due_date),
+            }
+            for t in plan
+        ])
+
+        conflicts = scheduler.detect_conflicts(plan)
+        if conflicts:
+            st.markdown("**Conflicts in this plan:**")
+            for warning in conflicts:
+                st.warning(warning)
+        else:
+            st.success("No conflicts in today's plan.")
